@@ -12,10 +12,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    exe.linkLibC();
+
+    // X11 libraries
+    exe.linkSystemLibrary("X11");
+    exe.linkSystemLibrary("Xft");
+    exe.addIncludePath(.{ .path = "/usr/include/freetype2" });
+
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
-
     run_cmd.step.dependOn(b.getInstallStep());
 
     if (b.args) |args| {
@@ -30,7 +36,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
     const test_step = b.step("test", "Run unit tests");
