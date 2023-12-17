@@ -1,4 +1,5 @@
 const std = @import("std");
+const linux = std.os.linux;
 
 const x11 = @import("x11.zig");
 const c = @import("c.zig");
@@ -12,6 +13,7 @@ pub fn run() !void {
         std.debug.print("warning: no locale support\n", .{});
 
     checkOtherWM(display);
+    setup();
 }
 
 var defaultErrorHandler: x11.XErrorHandler = undefined;
@@ -24,8 +26,6 @@ fn checkOtherWM(display: *x11.Display) void {
     _ = x11.XSetErrorHandler(handleXerrors);
     _ = x11.XSync(display, x11.False);
 }
-
-fn setup() void {}
 
 fn handleStartError(_: ?*x11.Display, _: [*c]x11.XErrorEvent) callconv(.C) c_int {
     std.debug.print("zwm: another window manager is already running\n", .{});
@@ -50,4 +50,25 @@ fn handleXerrors(display: ?*x11.Display, error_event: [*c]x11.XErrorEvent) callc
         .{ request_code, error_code },
     );
     return defaultErrorHandler.?(display, error_event);
+}
+
+fn setup() void {
+    preventChildZombies();
+    cleanUpZombies();
+}
+
+/// Do not transform children into zombies when they terminate
+fn preventChildZombies() void {
+    var sig_action = linux.Sigaction{
+        .handler = .{ .handler = linux.SIG.IGN },
+        .mask = linux.empty_sigset,
+        .flags = linux.SA.NOCLDSTOP | linux.SA.NOCLDWAIT | linux.SA.RESTART,
+    };
+    _ = linux.sigaction(linux.SIG.CHLD, &sig_action, null);
+}
+
+/// Clean up any zombies (inherited from .xinitrc etc) immediately
+fn cleanUpZombies() void {
+    var status: u32 = undefined;
+    while (linux.waitpid(-1, &status, linux.W.NOHANG) > 0) {}
 }
