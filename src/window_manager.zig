@@ -1,14 +1,15 @@
 const std = @import("std");
 
 const x11 = @import("x11.zig");
+const c = @import("c.zig");
 
 pub fn run() !void {
-    if (x11.XSupportsLocale() == 0)
-        std.debug.print("warning: no locale support\n", .{});
-
     const display: *x11.Display = x11.XOpenDisplay(null) orelse
         return std.debug.print("zwm: cannot open display\n", .{});
     defer _ = x11.XCloseDisplay(display);
+
+    if (c.setlocale(c.LC_CTYPE, "") == null or x11.XSupportsLocale() == x11.False)
+        std.debug.print("warning: no locale support\n", .{});
 
     checkOtherWM(display);
 }
