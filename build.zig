@@ -12,6 +12,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const version = b.option([]const u8, "version", "application version string") orelse "0.0.0";
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", version);
+    exe.addOptions("config", options);
+
     exe.linkLibC();
 
     // X11 libraries
