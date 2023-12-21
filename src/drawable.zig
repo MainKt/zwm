@@ -24,3 +24,27 @@ pub const Cursor = struct {
         _ = x11.XFreeCursor(self.display, self.move);
     }
 };
+
+pub const ColorScheme = struct {
+    foreground: x11.XftColor,
+    background: x11.XftColor,
+    border: x11.XftColor,
+
+    pub fn create(display: *x11.Display, screen: i32, colors: struct { foreground: []const u8, background: []const u8, border: []const u8 }) !ColorScheme {
+        return ColorScheme{
+            .foreground = try allocateColor(display, screen, colors.foreground),
+            .background = try allocateColor(display, screen, colors.background),
+            .border = try allocateColor(display, screen, colors.border),
+        };
+    }
+
+    fn allocateColor(display: *x11.Display, screen: i32, value: []const u8) !x11.XftColor {
+        var color: x11.XftColor = undefined;
+
+        if (x11.XftColorAllocName(display, x11.DefaultVisual(display, screen), x11.DefaultColormap(display, screen), @ptrCast(value), &color) == 0) {
+            return error.CannotAllocateColor;
+        }
+
+        return color;
+    }
+};
