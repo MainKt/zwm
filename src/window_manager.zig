@@ -4,21 +4,77 @@ const linux = std.os.linux;
 const x11 = @import("x11.zig");
 const c = @import("c.zig");
 
-pub fn run() !void {
-    const display: *x11.Display = x11.XOpenDisplay(null) orelse
-        return std.debug.print("zwm: cannot open display\n", .{});
-    defer _ = x11.XCloseDisplay(display);
+const config = @import("config.zig");
+
+const Drawable = @import("drawable.zig");
+const Dimension = Drawable.Dimension;
+const Screen = Drawable.Screen;
+const Cursor = Drawable.Cursor;
+const Font = Drawable.Font;
+const ColorScheme = Drawable.ColorScheme;
+
+var display: *x11.Display = undefined;
+var screen: Screen = undefined;
+var root: x11.Window = undefined;
+var cursor: Cursor = undefined;
+var defaultErrorHandler: x11.XErrorHandler = undefined;
+var fonts: [config.fonts.len]Font = undefined;
+var color_scheme: struct {
+    normal: ColorScheme,
+    selected: ColorScheme,
+} = undefined;
+
+pub fn start() !void {
+    display = x11.XOpenDisplay(null) orelse
+        return blk: {
+        std.debug.print("zwm: cannot open display\n", .{});
+        break :blk error.UnableToOpenDisplay;
+    };
 
     if (c.setlocale(c.LC_CTYPE, "") == null or x11.XSupportsLocale() == x11.False)
         std.debug.print("warning: no locale support\n", .{});
 
-    checkOtherWM(display);
-    setup();
+    checkOtherWM();
+
+    preventChildZombies();
+    cleanUpZombies();
+
+    try init();
+    cleanUp();
 }
 
-var defaultErrorHandler: x11.XErrorHandler = undefined;
+fn init() !void {
+    screen = .{
+        .number = x11.DefaultScreen(display),
+        .dimension = .{
+            .width = x11.DisplayWidth(display, screen.number),
+            .height = x11.DisplayHeight(display, screen.number),
+        },
+    };
 
-fn checkOtherWM(display: *x11.Display) void {
+    root = x11.RootWindow(display, screen.number);
+
+    cursor = Cursor.create(display);
+
+    for (config.fonts, 0..) |font, i| {
+        fonts[i] = try Font.create(display, screen.number, .{ .name = font });
+    }
+
+    color_scheme = .{
+        .normal = try ColorScheme.create(display, screen.number, config.colors.normal),
+        .selected = try ColorScheme.create(display, screen.number, config.colors.selected),
+    };
+}
+
+fn cleanUp() void {
+    for (&fonts) |*font| {
+        font.destroy();
+    }
+    cursor.destroy();
+    _ = x11.XCloseDisplay(display);
+}
+
+fn checkOtherWM() void {
     defaultErrorHandler = x11.XSetErrorHandler(handleStartError);
     _ = x11.XSelectInput(display, x11.DefaultRootWindow(display), x11.SubstructureRedirectMask);
     _ = x11.XSync(display, x11.False);
@@ -33,7 +89,7 @@ fn handleStartError(_: ?*x11.Display, _: [*c]x11.XErrorEvent) callconv(.C) c_int
     return -1;
 }
 
-fn handleXerrors(display: ?*x11.Display, error_event: [*c]x11.XErrorEvent) callconv(.C) c_int {
+fn handleXerrors(dpy: ?*x11.Display, error_event: [*c]x11.XErrorEvent) callconv(.C) c_int {
     const error_code = error_event.*.error_code;
     const request_code = error_event.*.request_code;
 
@@ -49,12 +105,7 @@ fn handleXerrors(display: ?*x11.Display, error_event: [*c]x11.XErrorEvent) callc
         "zwm: fatal error: request code={d}, error code={d}",
         .{ request_code, error_code },
     );
-    return defaultErrorHandler.?(display, error_event);
-}
-
-fn setup() void {
-    preventChildZombies();
-    cleanUpZombies();
+    return defaultErrorHandler.?(dpy, error_event);
 }
 
 /// Do not transform children into zombies when they terminate
