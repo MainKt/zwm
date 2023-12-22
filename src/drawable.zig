@@ -92,3 +92,40 @@ pub const ColorScheme = struct {
         return color;
     }
 };
+
+pub const Drawable = struct {
+    const Self = @This();
+
+    display: *x11.Display,
+    screen: i32,
+    dimension: Dimension,
+    root: x11.Window,
+    drawable: x11.Drawable,
+    graphics_context: x11.GC,
+
+    pub fn create(display: *x11.Display, screen: Screen, root: x11.Window) Self {
+        return Self{
+            .display = display,
+            .screen = screen.number,
+            .dimension = screen.dimension,
+            .drawable = x11.XCreatePixmap(display, root, screen.dimension.width, screen.dimension.height, x11.DefaultDepth(display, screen.number)),
+        };
+    }
+
+    pub fn resize(self: *Self, dimension: Dimension) void {
+        self.dimension = dimension;
+
+        x11.XFreePixmap(self.display, self.drawable);
+        self.drawable = x11.XcreatePixmap(self.display, self.root, dimension.width, dimension.height, x11.DefaultDepth(self.display, self.screen));
+    }
+
+    pub fn destroy(self: *Self) void {
+        x11.XFreePixmap(self.display, self.drawable);
+        x11.XFreeGC(self.display, self.graphics_context);
+    }
+
+    pub fn map(self: *Self, window: x11.Window, dimension: Dimension, position: Position) void {
+        x11.XCopyArea(self.display, self.drawable, window, self.graphics_context, position.x, position.y, dimension.x, dimension.y, position.x, position.y);
+        x11.XSync(self.display, x11.False);
+    }
+};
