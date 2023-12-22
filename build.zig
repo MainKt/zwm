@@ -21,6 +21,8 @@ pub fn build(b: *std.Build) void {
 
     // X11 libraries
     exe.linkSystemLibrary("X11");
+    exe.linkSystemLibrary("Xinerama");
+    exe.linkSystemLibrary("fontconfig");
     exe.linkSystemLibrary("Xft");
     exe.addIncludePath(.{ .path = "/usr/include/freetype2" });
 
