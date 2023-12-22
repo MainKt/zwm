@@ -124,6 +124,20 @@ pub const Drawable = struct {
         x11.XFreeGC(self.display, self.graphics_context);
     }
 
+    pub fn drawRectangle(
+        self: *Self,
+        position: Position,
+        dimension: Dimension,
+        style: struct { filled: bool, inverted: bool, color_scheme: ColorScheme },
+    ) void {
+        x11.XSetForeground(self.display, self.graphics_context, if (style.inverted) style.color_scheme.background.pixel else style.color_scheme.foreground.pixel);
+        if (style.filled) {
+            x11.XFillRectangle(self.display, self.drawable, self.graphics_context, position.x, position.y, dimension.width, dimension.height);
+        } else {
+            x11.XDrawRectangle(self.display, self.drawable, self.graphics_context, position.x, position.y, dimension.width - 1, dimension.height - 1);
+        }
+    }
+
     pub fn map(self: *Self, window: x11.Window, dimension: Dimension, position: Position) void {
         x11.XCopyArea(self.display, self.drawable, window, self.graphics_context, position.x, position.y, dimension.x, dimension.y, position.x, position.y);
         x11.XSync(self.display, x11.False);
